@@ -37,8 +37,14 @@ catkin_package(
 # target_link_libraries(zed_cpu_ros ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Boost_LIBRARIES})
 # add_dependencies(zed_cpu_ros arti_msgs_gencpp)
 
+# set zed-open-capture path
+set(ZED_OPEN_CAPTURE_INTALL_PATH "${PROJECT_SOURCE_DIR}/zed-open-capture")
+set(ZED_OPEN_CAPTURE_LIB "zed_open_capture")
+link_directories("${ZED_OPEN_CAPTURE_INTALL_PATH}/lib")
+include_directories("${ZED_OPEN_CAPTURE_INTALL_PATH}/include/zed-open-capture")
+
 add_executable(zed_cpu_ros src/zed_cpu_ros.cpp)
-target_link_libraries(zed_cpu_ros ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(zed_cpu_ros ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${ZED_OPEN_CAPTURE_LIB})
 
 # install(TARGETS 
 #        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
