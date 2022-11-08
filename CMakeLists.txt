@@ -41,7 +41,9 @@ catkin_package(
 set(ZED_OPEN_CAPTURE_INTALL_PATH "${PROJECT_SOURCE_DIR}/zed-open-capture")
 set(ZED_OPEN_CAPTURE_LIB "zed_open_capture")
 link_directories("${ZED_OPEN_CAPTURE_INTALL_PATH}/lib")
-include_directories("${ZED_OPEN_CAPTURE_INTALL_PATH}/include/zed-open-capture")
+include_directories("${ZED_OPEN_CAPTURE_INTALL_PATH}/include")
+add_definitions(-DVIDEO_MOD_AVAILABLE) # enable video code
+message("ZED_OPEN_CAPTURE_INTALL_PATH ============= ${ZED_OPEN_CAPTURE_INTALL_PATH}")
 
 add_executable(zed_cpu_ros src/zed_cpu_ros.cpp)
 target_link_libraries(zed_cpu_ros ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${ZED_OPEN_CAPTURE_LIB})

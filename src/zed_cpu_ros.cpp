@@ -13,6 +13,8 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <camera_info_manager/camera_info_manager.h>
 
+#include <zed-open-capture/videocapture.hpp>
+
 #define WIDTH_ID 3
 #define HEIGHT_ID 4
 #define FPS_ID 5
@@ -55,6 +57,7 @@ public:
    */
   void setResolution(int type)
   {
+    ROS_INFO("tttttttttttttttttttttttttttttt %d",type);
     switch (type)
     {
       case 0:
@@ -76,12 +79,13 @@ public:
       default:
         ROS_FATAL("Unknow resolution passed to camera: %d", type);
     }
-
+    ROS_INFO("set resolutionleft aaa width %d height %d",width_,height_);
     camera_->set(WIDTH_ID, width_);
     camera_->set(HEIGHT_ID, height_);
     // make sure that the number set are right from the hardware
     width_ = camera_->get(WIDTH_ID);
     height_ = camera_->get(HEIGHT_ID);
+    ROS_INFO("set resolutionleft width %d height %d",width_,height_);
   }
 
   /**
@@ -130,6 +134,44 @@ private:
   bool cv_three_;
 };
 
+
+/*!
+ * \brief Rescale the OpenCV images [cv::Mat] according to the selected resolution to better display them on screen and show
+ * \param name Name of the display window
+ * \param img Image to be displayed
+ * \param res Image resolution
+ * \param change_name Add rescaling information in window name if true
+ * \param info optional info string
+ */
+void showImage( std::string name, cv::Mat& img, sl_oc::video::RESOLUTION res, bool change_name=true, std::string info="" )
+{
+    cv::Mat resized;
+    switch(res)
+    {
+    default:
+    case sl_oc::video::RESOLUTION::VGA:
+        resized = img;
+        break;
+    case sl_oc::video::RESOLUTION::HD720:
+        if(change_name) name += " [Resize factor 0.6]";
+        cv::resize( img, resized, cv::Size(), 0.6, 0.6 );
+        break;
+    case sl_oc::video::RESOLUTION::HD1080:
+    case sl_oc::video::RESOLUTION::HD2K:
+        if(change_name) name += " [Resize factor 0.4]";
+        cv::resize( img, resized, cv::Size(), 0.4, 0.4 );
+        break;
+    }
+
+    if(!info.empty())
+    {
+        cv::putText( resized, info, cv::Point(20,40),cv::FONT_HERSHEY_SIMPLEX, 0.75,
+                     cv::Scalar(100,100,100), 2);
+    }
+
+    cv::imshow( name, resized );
+}
+
 /**
  * @brief       the camera ros warpper class
  */
@@ -157,101 +199,217 @@ public:
     private_nh.param("device_name", device_name_, std::string("/dev/video0"));
     private_nh.param("encoding", encoding_, std::string("brg8"));
 
-    correctFramerate(resolution_, frame_rate_);
-
-    ROS_INFO("Try to initialize the camera");
-    StereoCamera zed(device_name_, resolution_, frame_rate_);
-    ROS_INFO("Initialized the camera");
-
     // setup publisher stuff
     image_transport::ImageTransport it(nh);
     image_transport::Publisher left_image_pub = it.advertise("left/image_raw", 1);
     image_transport::Publisher right_image_pub = it.advertise("right/image_raw", 1);
 
-    ros::Publisher left_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("left/camera_info", 1);
-    ros::Publisher right_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("right/camera_info", 1);
+    image_transport::Publisher left_image_rect_pub = it.advertise("left/image_rect", 1);
+    image_transport::Publisher right_image_rect_pub = it.advertise("right/image_rect", 1);
+
+    // ros::Publisher left_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("left/camera_info", 1);
+    // ros::Publisher right_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("right/camera_info", 1);
 
     sensor_msgs::CameraInfo left_info, right_info;
 
-    ROS_INFO("Try load camera calibration files");
-    if (use_zed_config_)
+
+    // TODO use resolution from param
+    sl_oc::video::VideoParams params;
+    params.res = sl_oc::video::RESOLUTION::HD1080;
+    params.fps = sl_oc::video::FPS::FPS_30;
+    params.verbose = 1;
+
+    // ----> Create Video Capture
+    sl_oc::video::VideoCapture cap_0(params);
+    if( !cap_0.initializeVideo() )
     {
+        std::cerr << "Cannot open camera video capture" << std::endl;
+        std::cerr << "See verbosity level for more details." << std::endl;
+
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "Connected to camera sn: " << cap_0.getSerialNumber() << "[" << cap_0.getDeviceName() << "]" << std::endl;
+
+    // correctFramerate(resolution_, frame_rate_);
+
+    // ROS_INFO("Try to initialize the camera , resolution %d",resolution_);
+    // StereoCamera zed(device_name_, resolution_, frame_rate_);
+    // ROS_INFO("Initialized the camera");
+
+    // ----> Frame size
+    int w,h;
+    cap_0.getFrameSize(w,h);
+    // <---- Frame size
+
+    ROS_INFO("Try load camera calibration files");
+    // if (use_zed_config_)
+    // {
       ROS_INFO("Loading from zed calibration files");
       // get camera info from zed
-      if (!config_file_location_.empty())
+      // TODO check file exist
+      if(sl_oc::tools::checkFile(config_file_location_) == false)
       {
-        try
-        {
-          getZedCameraInfo(config_file_location_, resolution_, left_info, right_info);
-        }
-        catch (std::runtime_error& e)
-        {
-          ROS_INFO("Can't load camera info");
-          ROS_ERROR("%s", e.what());
-          throw e;
-        }
+         throw std::runtime_error("zed calibration file not exist <"+config_file_location_+">");
       }
-      else
-      {
-        ROS_FATAL("Please input zed config file path");
-      }
-    }
-    else
-    {
-      ROS_INFO("Loading from ROS calibration files");
-      // here we just use camera infor manager to load info
-      // get config from the left, right.yaml in config
-      ros::NodeHandle left_nh("left");
-      ros::NodeHandle right_nh("right");
-      camera_info_manager::CameraInfoManager left_info_manager(left_nh, "camera/left",
-                                                               "package://zed_cpu_ros/config/left.yaml");
-      left_info = left_info_manager.getCameraInfo();
 
-      camera_info_manager::CameraInfoManager right_info_manager(right_nh, "camera/right",
-                                                                "package://zed_cpu_ros/config/right.yaml");
-      right_info = right_info_manager.getCameraInfo();
 
-      left_info.header.frame_id = left_frame_id_;
-      right_info.header.frame_id = right_frame_id_;
-    }
+      // ----> Initialize calibration
+      cv::Mat map_left_x, map_left_y;
+      cv::Mat map_right_x, map_right_y;
+      cv::Mat cameraMatrix_left, cameraMatrix_right;
+      sl_oc::tools::initCalibration(config_file_location_, cv::Size(w/2,h), map_left_x, map_left_y, map_right_x, map_right_y,
+                      cameraMatrix_left, cameraMatrix_right);
 
-    ROS_INFO("Got camera calibration files");
-    // loop to publish images;
-    cv::Mat left_image, right_image;
-    ros::Rate r(frame_rate_);
+      std::cout << " Camera Matrix L: \n" << cameraMatrix_left << std::endl << std::endl;
+      std::cout << " Camera Matrix R: \n" << cameraMatrix_right << std::endl << std::endl;
+      // ----> Initialize calibration
+
+      cv::Mat frameBGR, left_raw, left_rect, right_raw, right_rect;
+
+      uint64_t last_ts=0;
+
+      // if (!config_file_location_.empty())
+      // {
+
+      // }
+      // else
+      // {
+      //   ROS_FATAL("Please input zed config file path");
+      // }
+    // }
+    // else
+    // {
+    //   ROS_INFO("Loading from ROS calibration files");
+    //   // here we just use camera infor manager to load info
+    //   // get config from the left, right.yaml in config
+    //   ros::NodeHandle left_nh("left");
+    //   ros::NodeHandle right_nh("right");
+    //   camera_info_manager::CameraInfoManager left_info_manager(left_nh, "camera/left",
+    //                                                            "package://zed_cpu_ros/config/left.yaml");
+    //   left_info = left_info_manager.getCameraInfo();
+
+    //   camera_info_manager::CameraInfoManager right_info_manager(right_nh, "camera/right",
+    //                                                             "package://zed_cpu_ros/config/right.yaml");
+    //   right_info = right_info_manager.getCameraInfo();
+
+    //   left_info.header.frame_id = left_frame_id_;
+    //   right_info.header.frame_id = right_frame_id_;
+    // }
+
+    // ROS_INFO("Got camera calibration files");
+    // // loop to publish images;
+    // cv::Mat left_image, right_image;
+    // ros::Rate r(frame_rate_);
 
     while (nh.ok())
     {
       ros::Time now = ros::Time::now();
-      if (!zed.getImages(left_image, right_image))
+      // Get last available frame
+      const sl_oc::video::Frame frame = cap_0.getLastFrame();
+
+      // ----> If the frame is valid we can convert, rectify and display it
+      if(frame.data==nullptr) 
       {
-        ROS_INFO_ONCE("Can't find camera");
+        ROS_ERROR("Frame Data Empty!");
+        continue;
       }
-      else
-      {
-        ROS_INFO_ONCE("Success, found camera");
+      if(frame.timestamp!=last_ts){
+        ROS_ERROR("Old Frame!");
+        continue;
       }
-      if (show_image_)
-      {
-        cv::imshow("left", left_image);
-        cv::imshow("right", right_image);
+      
+#ifdef TEST_FPS
+            if(lastFrameTs!=0)
+            {
+                // ----> System time
+                double now = static_cast<double>(getSteadyTimestamp())/1e9;
+                double elapsed_sec = now - lastTime;
+                lastTime = now;
+                std::cout << "[System] Frame period: " << elapsed_sec << "sec - Freq: " << 1./elapsed_sec << " Hz" << std::endl;
+                // <---- System time
+
+                // ----> Frame time
+                double frame_dT = static_cast<double>(frame.timestamp-lastFrameTs)/1e9;
+                std::cout << "[Camera] Frame period: " << frame_dT << "sec - Freq: " << 1./frame_dT << " Hz" << std::endl;
+                // <---- Frame time
+            }
+            lastFrameTs = frame.timestamp;
+#endif
+
+      last_ts = frame.timestamp;
+      // TODO compare ROS now and frame.timestamp
+
+      // ----> Conversion from YUV 4:2:2 to BGR for visualization
+      cv::Mat frameYUV = cv::Mat( frame.height, frame.width, CV_8UC2, frame.data );
+      cv::Mat frameBGR;
+      cv::cvtColor(frameYUV,frameBGR,cv::COLOR_YUV2BGR_YUYV);
+      // <---- Conversion from YUV 4:2:2 to BGR for visualization
+      // ----> Extract left and right images from side-by-side
+      left_raw = frameBGR(cv::Rect(0, 0, frameBGR.cols / 2, frameBGR.rows));
+      right_raw = frameBGR(cv::Rect(frameBGR.cols / 2, 0, frameBGR.cols / 2, frameBGR.rows));
+
+      // Display images
+      if (show_image_){
+        showImage("left RAW", left_raw, params.res);
+        showImage("right RAW", right_raw, params.res);
       }
+      // <---- Extract left and right images from side-by-side
+
+      // ----> Apply rectification
+      cv::remap(left_raw, left_rect, map_left_x, map_left_y, cv::INTER_LINEAR );
+      cv::remap(right_raw, right_rect, map_right_x, map_right_y, cv::INTER_LINEAR );
+
+      if (show_image_){
+        showImage("right RECT", right_rect, params.res);
+        showImage("left RECT", left_rect, params.res);
+      }
+
+      // // TODO cut to left,right image
+      // cv::Rect left_rect(0, 0, width_ / 2, height_);
+      // cv::Rect right_rect(width_ / 2, 0, width_ / 2, height_);
+      // left_image = raw(left_rect);
+      // right_image = raw(right_rect);
+      // // TODO resize image if show
+
+      // if (!zed.getImages(left_image, right_image))
+      // {
+      //   ROS_INFO_ONCE("Can't find camera");
+      // }
+      // else
+      // {
+      //   ROS_INFO_ONCE("Success, found camera");
+      // }
+      // if (show_image_)
+      // {
+      //   cv::imshow("left", left_image);
+      //   cv::imshow("right", right_image);
+      // }
       if (left_image_pub.getNumSubscribers() > 0)
       {
-        publishImage(left_image, left_image_pub, "left_frame", now);
+        publishImage(left_raw, left_image_pub, "left_frame", now);
       }
       if (right_image_pub.getNumSubscribers() > 0)
       {
-        publishImage(right_image, right_image_pub, "right_frame", now);
+        publishImage(right_raw, right_image_pub, "right_frame", now);
       }
-      if (left_cam_info_pub.getNumSubscribers() > 0)
+      if (left_image_rect_pub.getNumSubscribers() > 0)
       {
-        publishCamInfo(left_cam_info_pub, left_info, now);
+        publishImage(left_rect, left_image_rect_pub, "left_frame", now);
       }
-      if (right_cam_info_pub.getNumSubscribers() > 0)
+      if (right_image_rect_pub.getNumSubscribers() > 0)
       {
-        publishCamInfo(right_cam_info_pub, right_info, now);
+        publishImage(right_rect, right_image_pub, "right_frame", now);
       }
+      
+      // if (left_cam_info_pub.getNumSubscribers() > 0)
+      // {
+      //   publishCamInfo(left_cam_info_pub, left_info, now);
+      // }
+      // if (right_cam_info_pub.getNumSubscribers() > 0)
+      // {
+      //   publishCamInfo(right_cam_info_pub, right_info, now);
+      // }
       r.sleep();
       // since the frame rate was set inside the camera, no need to do a ros sleep
     }
@@ -296,6 +454,7 @@ public:
     double l_fy = pt.get<double>(left_str + reso_str + ".fy");
     double l_k1 = pt.get<double>(left_str + reso_str + ".k1");
     double l_k2 = pt.get<double>(left_str + reso_str + ".k2");
+    ROS_INFO("left camera cx %f cy %f",l_cx,l_cy);
     // right value
     double r_cx = pt.get<double>(right_str + reso_str + ".cx");
     double r_cy = pt.get<double>(right_str + reso_str + ".cy");
@@ -405,6 +564,7 @@ public:
 
     left_info.width = right_info.width = width_;
     left_info.height = right_info.height = height_;
+    ROS_INFO("left width %d height %d",left_info.width,left_info.height);
 
     left_info.header.frame_id = left_frame_id_;
     right_info.header.frame_id = right_frame_id_;
@@ -445,7 +605,10 @@ public:
     cv_image.encoding = encoding_;
     cv_image.header.frame_id = img_frame_id;
     cv_image.header.stamp = t;
-    img_pub.publish(cv_image.toImageMsg());
+    auto msg = cv_image.toImageMsg();
+    ROS_INFO("publish image rows %d cols %d data %ld encoding %s",img.rows,
+      img.cols, msg->data.size(),encoding_.c_str());
+    img_pub.publish(msg);
   }
   /**
    * @brief      Correct frame rate according to resolution
@@ -453,7 +616,7 @@ public:
    * @param[in]  resolution          The resolution
    * @param      frame_rate   			 The camera frame rate
    */
-  void correctFramerate(int resolution, double& frame_rate)
+  void correctFramerate(const int resolution, double& frame_rate)
   {
     double max_frame_rate;
     std::string reso_str = "";
