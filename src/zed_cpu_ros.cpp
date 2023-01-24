@@ -13,7 +13,11 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <camera_info_manager/camera_info_manager.h>
 
+#include <zed-open-capture/calibration.hpp>
+#include <zed-open-capture/ocv_display.hpp>
 #include <zed-open-capture/videocapture.hpp>
+#include <zed-open-capture/videocapture.hpp>
+
 
 #define WIDTH_ID 3
 #define HEIGHT_ID 4
@@ -21,118 +25,118 @@
 
 namespace arti
 {
-class StereoCamera
-{
-public:
-  /**
-   * @brief      { stereo camera driver }
-   *
-   * @param[in]  resolution  The resolution
-   * @param[in]  frame_rate  The frame rate
-   */
-  StereoCamera(std::string device_name, int resolution, double frame_rate) : frame_rate_(30.0)
-  {
-    camera_ = new cv::VideoCapture(device_name);
-    cv::Mat raw;
-    cv::Mat left_image;
-    cv::Mat right_image;
-    setResolution(resolution);
-    // // this function doesn't work very well in current Opencv 2.4, so, just use ROS to control frame rate.
-    // setFrameRate(frame_rate);
+// class StereoCamera
+// {
+// public:
+//   /**
+//    * @brief      { stereo camera driver }
+//    *
+//    * @param[in]  resolution  The resolution
+//    * @param[in]  frame_rate  The frame rate
+//    */
+//   StereoCamera(std::string device_name, int resolution, double frame_rate) : frame_rate_(30.0)
+//   {
+//     camera_ = new cv::VideoCapture(device_name);
+//     cv::Mat raw;
+//     cv::Mat left_image;
+//     cv::Mat right_image;
+//     setResolution(resolution);
+//     // // this function doesn't work very well in current Opencv 2.4, so, just use ROS to control frame rate.
+//     // setFrameRate(frame_rate);
 
-    ROS_INFO("Stereo Camera Set Resolution %d, width %f, height %f", resolution, camera_->get(WIDTH_ID),
-             camera_->get(HEIGHT_ID));
-  }
+//     ROS_INFO("Stereo Camera Set Resolution %d, width %f, height %f", resolution, camera_->get(WIDTH_ID),
+//              camera_->get(HEIGHT_ID));
+//   }
 
-  ~StereoCamera()
-  {
-    // std::cout << "Destroy the pointer" << std::endl;
-    delete camera_;
-  }
+//   ~StereoCamera()
+//   {
+//     // std::cout << "Destroy the pointer" << std::endl;
+//     delete camera_;
+//   }
 
-  /**
-   * @brief      Sets the resolution.
-   *
-   * @param[in]  type  The type
-   */
-  void setResolution(int type)
-  {
-    ROS_INFO("tttttttttttttttttttttttttttttt %d",type);
-    switch (type)
-    {
-      case 0:
-        width_ = 4416;
-        height_ = 1242;
-        break;
-      case 1:
-        width_ = 3840;
-        height_ = 1080;
-        break;
-      case 2:
-        width_ = 2560;
-        height_ = 720;
-        break;
-      case 3:
-        width_ = 1344;
-        height_ = 376;
-        break;
-      default:
-        ROS_FATAL("Unknow resolution passed to camera: %d", type);
-    }
-    ROS_INFO("set resolutionleft aaa width %d height %d",width_,height_);
-    camera_->set(WIDTH_ID, width_);
-    camera_->set(HEIGHT_ID, height_);
-    // make sure that the number set are right from the hardware
-    width_ = camera_->get(WIDTH_ID);
-    height_ = camera_->get(HEIGHT_ID);
-    ROS_INFO("set resolutionleft width %d height %d",width_,height_);
-  }
+//   /**
+//    * @brief      Sets the resolution.
+//    *
+//    * @param[in]  type  The type
+//    */
+//   void setResolution(int type)
+//   {
+//     ROS_INFO("tttttttttttttttttttttttttttttt %d",type);
+//     switch (type)
+//     {
+//       case 0:
+//         width_ = 4416;
+//         height_ = 1242;
+//         break;
+//       case 1:
+//         width_ = 3840;
+//         height_ = 1080;
+//         break;
+//       case 2:
+//         width_ = 2560;
+//         height_ = 720;
+//         break;
+//       case 3:
+//         width_ = 1344;
+//         height_ = 376;
+//         break;
+//       default:
+//         ROS_FATAL("Unknow resolution passed to camera: %d", type);
+//     }
+//     ROS_INFO("set resolutionleft aaa width %d height %d",width_,height_);
+//     camera_->set(WIDTH_ID, width_);
+//     camera_->set(HEIGHT_ID, height_);
+//     // make sure that the number set are right from the hardware
+//     width_ = camera_->get(WIDTH_ID);
+//     height_ = camera_->get(HEIGHT_ID);
+//     ROS_INFO("set resolutionleft width %d height %d",width_,height_);
+//   }
 
-  /**
-   * @brief      Sets the frame rate.
-   *
-   * @param[in]  frame_rate  The frame rate
-   */
-  void setFrameRate(double frame_rate)
-  {
-    camera_->set(FPS_ID, frame_rate);
-    frame_rate_ = camera_->get(FPS_ID);
-  }
+//   /**
+//    * @brief      Sets the frame rate.
+//    *
+//    * @param[in]  frame_rate  The frame rate
+//    */
+//   void setFrameRate(double frame_rate)
+//   {
+//     camera_->set(FPS_ID, frame_rate);
+//     frame_rate_ = camera_->get(FPS_ID);
+//   }
 
-  /**
-   * @brief      Gets the images.
-   *
-   * @param      left_image   The left image
-   * @param      right_image  The right image
-   *
-   * @return     The images.
-   */
-  bool getImages(cv::Mat& left_image, cv::Mat& right_image)
-  {
-    cv::Mat raw;
-    if (camera_->grab())
-    {
-      camera_->retrieve(raw);
-      cv::Rect left_rect(0, 0, width_ / 2, height_);
-      cv::Rect right_rect(width_ / 2, 0, width_ / 2, height_);
-      left_image = raw(left_rect);
-      right_image = raw(right_rect);
-      cv::waitKey(10);
-      return true;
-    }
-    else
-    {
-      return false;
-    }
-  }
+//   /**
+//    * @brief      Gets the images.
+//    *
+//    * @param      left_image   The left image
+//    * @param      right_image  The right image
+//    *
+//    * @return     The images.
+//    */
+//   bool getImages(cv::Mat& left_image, cv::Mat& right_image)
+//   {
+//     cv::Mat raw;
+//     if (camera_->grab())
+//     {
+//       camera_->retrieve(raw);
+//       cv::Rect left_rect(0, 0, width_ / 2, height_);
+//       cv::Rect right_rect(width_ / 2, 0, width_ / 2, height_);
+//       left_image = raw(left_rect);
+//       right_image = raw(right_rect);
+//       cv::waitKey(10);
+//       return true;
+//     }
+//     else
+//     {
+//       return false;
+//     }
+//   }
 
-private:
-  cv::VideoCapture* camera_;
-  int width_;
-  int height_;
-  double frame_rate_;
-  bool cv_three_;
-};
+// private:
+//   cv::VideoCapture* camera_;
+//   int width_;
+//   int height_;
+//   double frame_rate_;
+//   bool cv_three_;
+// };
 
 
 /*!
@@ -190,7 +194,7 @@ public:
     ros::NodeHandle private_nh("~");
     // get ros param
     private_nh.param("resolution", resolution_, 1);
-    private_nh.param("frame_rate", frame_rate_, 30.0);
+    // private_nh.param("frame_rate", frame_rate_, 30.0);
     private_nh.param("config_file_location", config_file_location_, std::string(""));
     private_nh.param("left_frame_id", left_frame_id_, std::string("left_camera"));
     private_nh.param("right_frame_id", right_frame_id_, std::string("right_camera"));
@@ -221,12 +225,15 @@ public:
 
     // ----> Create Video Capture
     sl_oc::video::VideoCapture cap_0(params);
+
+    frame_rate_ = int(params.fps);
+
     if( !cap_0.initializeVideo() )
     {
         std::cerr << "Cannot open camera video capture" << std::endl;
         std::cerr << "See verbosity level for more details." << std::endl;
 
-        return EXIT_FAILURE;
+        throw std::runtime_error("initializeVideo fail");
     }
 
     std::cout << "Connected to camera sn: " << cap_0.getSerialNumber() << "[" << cap_0.getDeviceName() << "]" << std::endl;
@@ -300,7 +307,7 @@ public:
     // ROS_INFO("Got camera calibration files");
     // // loop to publish images;
     // cv::Mat left_image, right_image;
-    // ros::Rate r(frame_rate_);
+    ros::Rate r(frame_rate_);
 
     while (nh.ok())
     {
@@ -314,7 +321,7 @@ public:
         ROS_ERROR("Frame Data Empty!");
         continue;
       }
-      if(frame.timestamp!=last_ts){
+      if(frame.timestamp == last_ts){
         ROS_ERROR("Old Frame!");
         continue;
       }
@@ -351,8 +358,9 @@ public:
 
       // Display images
       if (show_image_){
+        // only use left
         showImage("left RAW", left_raw, params.res);
-        showImage("right RAW", right_raw, params.res);
+        // showImage("right RAW", right_raw, params.res);
       }
       // <---- Extract left and right images from side-by-side
 
@@ -361,8 +369,14 @@ public:
       cv::remap(right_raw, right_rect, map_right_x, map_right_y, cv::INTER_LINEAR );
 
       if (show_image_){
-        showImage("right RECT", right_rect, params.res);
+        // only use left
+        // showImage("right RECT", right_rect, params.res);
         showImage("left RECT", left_rect, params.res);
+        // ----> Keyboard handling
+        int key = cv::waitKey( 5 );
+        if(key=='q' || key=='Q') // Quit
+            break;
+        // <---- Keyboard handling
       }
 
       // // TODO cut to left,right image
