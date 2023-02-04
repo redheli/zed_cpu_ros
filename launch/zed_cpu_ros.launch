@@ -5,7 +5,7 @@
 <arg name="device_name" value="/dev/video2"/>
 <arg name="resolution" default="0"/>
 <arg name="frame_rate" default="30"/>
-<arg name="show_image" default="false"/>
+<arg name="show_image" default="true"/>
 <arg name="encoding" default="bgr8"/>
 <arg name="use_zed_config" default="true"/>
 

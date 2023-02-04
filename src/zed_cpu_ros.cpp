@@ -401,11 +401,11 @@ public:
       // }
       if (left_image_pub.getNumSubscribers() > 0)
       {
-        // publishImage(left_raw, left_image_pub, "left_frame", now);
+        publishImage(left_raw, left_image_pub, "left_frame", now);
       }
       if (right_image_pub.getNumSubscribers() > 0)
       {
-        // publishImage(right_raw, right_image_pub, "right_frame", now);
+        publishImage(right_raw, right_image_pub, "right_frame", now);
       }
       if (left_image_rect_pub.getNumSubscribers() > 0)
       {
@@ -413,7 +413,7 @@ public:
       }
       if (right_image_rect_pub.getNumSubscribers() > 0)
       {
-        // publishImage(right_rect, right_image_pub, "right_frame", now);
+        publishImage(right_rect, right_image_pub, "right_frame", now);
       }
       
       // if (left_cam_info_pub.getNumSubscribers() > 0)
