@@ -254,7 +254,7 @@ public:
       }
       if (right_image_rect_pub.getNumSubscribers() > 0)
       {
-        publishImage(right_rect, right_image_pub, "right_frame", now);
+        publishImage(right_rect, right_image_rect_pub, "right_frame", now);
       }
       
       r.sleep();
