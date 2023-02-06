@@ -219,8 +219,8 @@ public:
 
     // TODO use resolution from param
     sl_oc::video::VideoParams params;
-    params.res = sl_oc::video::RESOLUTION::HD2K;
-    params.fps = sl_oc::video::FPS::FPS_15;
+    params.res = sl_oc::video::RESOLUTION::HD1080;
+    params.fps = sl_oc::video::FPS::FPS_30;
     params.verbose = 1;
 
     // ----> Create Video Capture
