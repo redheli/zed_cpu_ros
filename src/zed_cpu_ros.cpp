@@ -125,6 +125,14 @@ public:
 
     std::cout << "Connected to camera sn: " << cap_0.getSerialNumber() << "[" << cap_0.getDeviceName() << "]" << std::endl;
 
+    // set brightness value
+    const int brightness_expect = 8;
+    auto curr_brightness = cap_0.getBrightness();
+    std::cout<<"current brightness "<<curr_brightness<<std::endl;
+    cap_0.setBrightness( brightness_expect );
+    curr_brightness = cap_0.getBrightness();
+    std::cout<<"new brightness value "<<curr_brightness<<std::endl;
+
     // correctFramerate(resolution_, frame_rate_);
 
     // ROS_INFO("Try to initialize the camera , resolution %d",resolution_);
