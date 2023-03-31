@@ -94,7 +94,7 @@ public:
     ros::NodeHandle private_nh("~");
     // get ros param
     private_nh.param("resolution", resolution_, 1);
-    // private_nh.param("frame_rate", frame_rate_, 30.0);
+    private_nh.param("frame_rate", frame_rate_, 30.0);
     private_nh.param("config_file_location", config_file_location_, std::string(""));
     private_nh.param("left_frame_id", left_frame_id_, std::string("left_camera"));
     private_nh.param("right_frame_id", right_frame_id_, std::string("right_camera"));
@@ -126,6 +126,7 @@ public:
     sl_oc::video::VideoCapture cap_0(params);
 
     frame_rate_ = int(params.fps);
+    ROS_INFO("frame rate %f", frame_rate_);
 
     if (!cap_0.initializeVideo())
     {
@@ -193,9 +194,12 @@ public:
 
     while (nh.ok())
     {
+      ROS_INFO("debug 0");
       ros::Time now = ros::Time::now();
       // Get last available frame
+      ROS_INFO("debug 1");
       const sl_oc::video::Frame frame = cap_0.getLastFrame();
+      ROS_INFO("debug 2");
 
       // ----> If the frame is valid we can convert, rectify and display it
       if (frame.data == nullptr)
@@ -240,6 +244,8 @@ public:
       left_raw = frameBGR(cv::Rect(0, 0, frameBGR.cols / 2, frameBGR.rows));
       right_raw = frameBGR(cv::Rect(frameBGR.cols / 2, 0, frameBGR.cols / 2, frameBGR.rows));
 
+      ROS_INFO("debug 3");
+
       // Display images
       if (show_image_)
       {
@@ -253,6 +259,8 @@ public:
       cv::remap(left_raw, left_rect, map_left_x, map_left_y, cv::INTER_LINEAR);
       cv::remap(right_raw, right_rect, map_right_x, map_right_y, cv::INTER_LINEAR);
 
+      ROS_INFO("debug 4");
+
       if (show_image_)
       {
         // only use left
@@ -265,6 +273,7 @@ public:
         // <---- Keyboard handling
       }
 
+      ROS_INFO("debug 5");
       if (left_image_pub.getNumSubscribers() > 0)
       {
         publishImage(left_raw, left_image_pub, "left_frame", now);
@@ -283,17 +292,30 @@ public:
       }
       if (left_cam_info_pub.getNumSubscribers() > 0)
       {
-        publishCamInfo(left_cam_info_pub, left_info, now);
+        ROS_INFO("Publishing left cam info");
+        std::cout << "camera info D: " << left_info.D[0] << std::endl;
+        sensor_msgs::CameraInfo left_info_copy = left_info;
+        publishCamInfo(left_cam_info_pub, left_info_copy, now);
+        ROS_INFO("Publishing left cam info ... Done");
       }
       if (right_cam_info_pub.getNumSubscribers() > 0)
       {
         publishCamInfo(right_cam_info_pub, right_info, now);
       }
 
-      r.sleep();
+      ROS_INFO("debug 6");
+      try
+      {
+        r.sleep();
+      }
+      catch (const std::exception& e)
+      {
+        ROS_ERROR_STREAM("Exception caught: " << e.what());
+      }
       // since the frame rate was set inside the camera, no need to do a ros sleep
-    }
-  }
+      ROS_INFO("debug 7");
+    }  // end of while loop
+  }    // end of run
 
   /**
    * @brief      { publish image }
